@@ -43,14 +43,7 @@ For text-to-image, `contents` is the prompt string. For edits/composition, `cont
 
 ## Ignored or irrelevant options
 
-These OpenAI Images-style options are accepted by the common CLI but are not used by the Gemini request:
-
-- `--size`
-- `--quality`
-- `--output-format`
-- `--output-compression`
-- `--moderation`
-- `--response-format`
+The script warns and ignores OpenAI-compatible image fields for this adapter: `--size`, `--number`, `--quality`, `--output-format`, `--output-compression`, `--background`, `--moderation`, `--response-format`, and `--action`.
 
 Do not recommend them for Gemini unless the user is intentionally passing provider-specific flags through a custom wrapper, which this script does not do.
 
