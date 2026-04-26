@@ -2,7 +2,7 @@
 
 Use this reference when the user wants to configure image-generation-studio providers, models, aliases, API endpoints, API keys, or defaults. This includes casual requests like "Configure this interface for me.", "Add this API address.", "I want to use Grok for visualization.", "config.json is empty, how do I fill it in?."
 
-The goal is to convert the user's natural-language description into a valid `{baseDir}/config.json` update. Keep `SKILL.md` generic for distribution; local `config.json` is user-specific runtime state.
+The goal is to convert the user's natural-language description into a valid local `{baseDir}/config.json` update. Keep `SKILL.md` generic for distribution; `config.json` is user-specific runtime state and should be created locally only when configuration is needed.
 
 ## Provider and model resolution
 
@@ -18,7 +18,7 @@ Persistent `system_prompt` entries in `config.json` are intentionally ignored be
 
 ## Configuration shape
 
-`{baseDir}/config.json` may be missing, empty, or `{}`. Treat all of those as an empty config and write a normalized object like:
+`{baseDir}/config.json` may be missing, empty, or `{}`. Treat all of those as an empty config. If the user is configuring providers or aliases and the file is missing, create it locally with a normalized object like:
 
 ```json
 {

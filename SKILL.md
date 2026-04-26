@@ -1,14 +1,14 @@
 ---
 name: image-generation-studio
 description: Generate or edit images with the image-generation-studio CLI through supported adapters (`gemini`, `openai_images`, `openai_responses`) and user-configured providers, endpoints, models, and aliases. Use this skill whenever the user wants to create, edit, compose, or restyle images — including prompts like "make an image", "generate a picture", "edit this photo", "combine these images", "4K poster", or mentions of configured image providers/models such as "nano banana", "Gemini image", "Grok image", "xAI image", "OpenAI image", "OpenAI Responses", "custom image provider", or "gpt-image".
-version: 1.1.1
+version: 1.1.2
 requires:
   bins: ["uv"]
 ---
 
 # Image Generation Studio
 
-Use this skill by running `uv run {baseDir}/scripts/generate.py`. Treat `{baseDir}/config.json` as local runtime state: it may be empty or omitted in a distributed skill, and users can add their own provider names, API endpoints, default models, and aliases without changing this document.
+Use this skill by running `uv run {baseDir}/scripts/generate.py`. Treat `{baseDir}/config.json` as local runtime state: it may be missing in a distributed skill, the CLI treats a missing file as empty config, and users can create it locally for their own provider names, API endpoints, default models, and aliases.
 
 ## Prerequisites
 

@@ -4,7 +4,7 @@
 
 ## 这个 Skill 能做什么
 
-本仓库让 Agent 调用 `scripts/generate.py`，并根据用户配置的 provider、endpoint、model 和 alias 来生成或编辑图片。它适合作为可分发的 Skill：`SKILL.md` 负责描述 Agent 使用方式，`config.json` 负责保存本地运行配置，分发时可以保持为空。
+本仓库让 Agent 调用 `scripts/generate.py`，并根据用户配置的 provider、endpoint、model 和 alias 来生成或编辑图片。它适合作为可分发的 Skill：`SKILL.md` 负责描述 Agent 使用方式，`config.json` 是用户配置 provider 或 alias 时才在本地创建的运行配置。
 
 支持的适配器：
 
@@ -67,7 +67,7 @@ uv run scripts/generate.py --provider my-responses-provider -p "change the mug c
 
 ## 配置说明
 
-本地 provider 配置位于 `config.json`。这个文件可以是空对象 `{}`，也可以在分发 Skill 时省略，或者填入用户自己的 provider 和模型别名。
+本地 provider 配置位于 `config.json`。这个文件是用户专属的运行状态，不随 Skill 分发；如果文件不存在，CLI 会把它当作空配置，并回退到内置 provider 和 alias。用户要求配置 provider 或 alias 时，再在本地创建 `config.json`。
 
 最小配置示例：
 
@@ -137,7 +137,7 @@ provider 名称会转换为环境变量前缀：转为大写，并把 `-` 替换
 ```text
 .
 ├── SKILL.md                         # Claude Code Skill 元数据和 Agent 使用说明
-├── config.json                      # 本地运行配置；可以保持为空
+├── config.json                      # 本地运行配置；用户需要时创建，不随 Skill 分发
 ├── scripts/
 │   └── generate.py                  # 统一的图片生成/编辑 CLI
 └── references/
@@ -149,7 +149,8 @@ provider 名称会转换为环境变量前缀：转为大写，并把 `-` 替换
 
 ## 分发注意事项
 
-- 不要把真实 API Key 分发到 `config.json` 中。
-- 推荐使用每次调用时传入 `--api-key` 或环境变量管理密钥；只有在用户明确接受本地保存密钥时，才写入 `config.json`。
+- 不要分发 `config.json`；它是用户专属的本地运行状态，需要时再创建。
+- 不要在任何文件里分发真实 API Key。
+- 推荐使用每次调用时传入 `--api-key` 或环境变量管理密钥；只有在用户明确接受本地保存密钥时，才写入本地 `config.json`。
 - 不要把 `system_prompt` 持久化到 `config.json`；需要时只用 `--system-prompt` 作用于当前调用。
-- `SKILL.md` 保持通用说明，本地运行状态放在 `config.json`。
+- `SKILL.md` 保持通用说明，本地运行状态放在本地 `config.json`。

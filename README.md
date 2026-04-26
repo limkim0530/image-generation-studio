@@ -4,7 +4,7 @@ A skill for generating, editing, composing, and restyling images through a unifi
 
 ## What this skill does
 
-This repository lets an Agent call `scripts/generate.py` to create or edit images using user-configured providers, endpoints, models, and aliases. It is designed as a portable skill: `SKILL.md` documents the Agent-facing behavior, while `config.json` stores local runtime configuration and can stay empty in a distributed copy.
+This repository lets an Agent call `scripts/generate.py` to create or edit images using user-configured providers, endpoints, models, and aliases. It is designed as a portable skill: `SKILL.md` documents the Agent-facing behavior, while `config.json` is local runtime configuration created only when a user configures providers or aliases.
 
 Supported adapters:
 
@@ -67,7 +67,7 @@ uv run scripts/generate.py --provider my-responses-provider -p "change the mug c
 
 ## Configuration
 
-Local provider configuration lives in `config.json`. The file can be empty (`{}`), omitted in a distributed skill, or filled with user-specific providers and aliases.
+Local provider configuration lives in `config.json`. This file is user-specific runtime state and is not distributed with the skill; if it is missing, the CLI treats it as an empty config and falls back to built-in providers and aliases. When a user asks to configure providers or aliases, create `config.json` locally.
 
 Minimal example:
 
@@ -137,7 +137,7 @@ Adapter-specific support varies. Read the relevant reference before recommending
 ```text
 .
 ├── SKILL.md                         # Claude Code skill metadata and Agent instructions
-├── config.json                      # Local runtime config; may remain empty
+├── config.json                      # Local runtime config; created by users when needed and not distributed
 ├── scripts/
 │   └── generate.py                  # Unified image generation/editing CLI
 └── references/
@@ -149,7 +149,8 @@ Adapter-specific support varies. Read the relevant reference before recommending
 
 ## Notes for distribution
 
-- Do not distribute real API keys in `config.json`.
-- It is recommended to pass `--api-key` with each call or manage keys via environment variables; write to `config.json` only when the user explicitly accepts local key storage.
+- Do not distribute `config.json`; it is user-specific runtime state and should be created locally when needed.
+- Do not distribute real API keys in any file.
+- It is recommended to pass `--api-key` with each call or manage keys via environment variables; write keys to local `config.json` only when the user explicitly accepts local key storage.
 - Do not persist `system_prompt` in `config.json`; pass `--system-prompt` only for the current call.
-- Keep `SKILL.md` generic; use `config.json` for local runtime state.
+- Keep `SKILL.md` generic; use local `config.json` for runtime state.
