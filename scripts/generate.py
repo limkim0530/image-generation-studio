@@ -574,29 +574,15 @@ def _openai_images_http(url: str, headers: dict, body: bytes, timeout: int = 300
         die(f"OpenAI Images call failed: {e}")
 
 
-def _download_image_url(url: str, api_key: str | None = None, timeout: int = 120) -> bytes:
+def _download_image_url(url: str, timeout: int = 120) -> bytes:
     headers = {
         **BROWSER_HEADERS,
         "Accept": "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
         "Referer": "https://x.ai/",
     }
-    auth_error = None
-    for include_auth in (False, True):
-        request_headers = dict(headers)
-        if include_auth and api_key:
-            request_headers["Authorization"] = f"Bearer {api_key}"
-        req = urllib.request.Request(url, headers=request_headers, method="GET")
-        try:
-            with urllib.request.urlopen(req, timeout=timeout) as r:
-                return r.read()
-        except urllib.error.HTTPError as e:
-            if e.code in {401, 403} and not include_auth and api_key:
-                auth_error = e
-                continue
-            raise
-    if auth_error:
-        raise auth_error
-    raise RuntimeError("image download failed")
+    req = urllib.request.Request(url, headers=headers, method="GET")
+    with urllib.request.urlopen(req, timeout=timeout) as r:
+        return r.read()
 
 
 def openai_images_size(args) -> str:
@@ -707,7 +693,7 @@ def openai_images_generate(args, model: str, api_url: str | None, api_key: str, 
             img_bytes = base64.b64decode(item["b64_json"])
         elif item.get("url"):
             try:
-                img_bytes = _download_image_url(item["url"], api_key)
+                img_bytes = _download_image_url(item["url"])
             except Exception as e:
                 die(f"Cannot download image from {item['url']}: {e}")
         else:

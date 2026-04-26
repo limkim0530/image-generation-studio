@@ -21,7 +21,7 @@ For edits, each input is sent as a repeated multipart field named `image[]`.
 - Image editing when one or more `-i / --input` images are provided.
 - Multiple edit input images at the wrapper level, although provider/model support varies.
 - OpenAI Images-style size, quality, output format, moderation, compression, response format, and image count fields.
-- URL image download with browser-like headers and retry with bearer auth on 401/403.
+- URL image download with browser-like headers. Provider API credentials are only sent to API endpoints, never to returned image URLs.
 
 ## Relevant CLI options
 
