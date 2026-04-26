@@ -115,7 +115,7 @@ For detailed configuration guidance, see `references/configuration.md`.
 | `--size` | OpenAI Images-style size such as `1024x1024` or `1536x1024` |
 | `--quality` | OpenAI Images-style quality value |
 | `--response-format` | OpenAI Images-style response format, such as `url` or `b64_json` |
-| `--system-prompt`, `--system` | Global instruction/style prefix for the call |
+| `--system-prompt`, `--system` | Per-call instruction/style prefix |
 | `--search` | Gemini Nano 2 search grounding mode |
 | `--thinking` | Gemini Nano 2 thinking mode |
 | `--stream` | Gemini streaming text output |
@@ -145,4 +145,5 @@ Adapter-specific support varies. Read the relevant reference before recommending
 
 - Do not distribute real API keys in `config.json`.
 - Prefer environment variables or per-call `--api-key` for secrets.
+- Do not persist `system_prompt` in `config.json`; pass `--system-prompt` only for the current call.
 - Keep `SKILL.md` generic; use `config.json` for local runtime state.

@@ -312,9 +312,9 @@ def parse_args():
     p.add_argument("--stream", action="store_true",
                    help="Gemini only: stream text chunks live; image still writes at end")
     p.add_argument("--system-prompt", "--system", dest="system_prompt",
-                   help="System instruction / global style prefix. Gemini sends it as "
+                   help="System instruction / style prefix for this call only. Gemini sends it as "
                         "system_instruction; OpenAI-compatible adapters prepend it "
-                        "to the user prompt. Overrides config.json 'system_prompt'.")
+                        "to the user prompt.")
     return p.parse_args()
 
 
@@ -755,8 +755,9 @@ def main():
     cfg = load_config()
     provider, adapter, model = resolve_provider_adapter_model(args, cfg)
 
-    # Resolve system prompt: CLI > config.json top-level. Falsy strings ("") drop out naturally.
-    args.system_prompt = args.system_prompt or cfg.get("system_prompt") or None
+    if cfg.get("system_prompt"):
+        print("Warning: config.json 'system_prompt' is ignored; pass --system-prompt for per-call instructions.", file=sys.stderr)
+    args.system_prompt = args.system_prompt or None
 
     # provider/adapter-mismatched flag warnings (non-fatal; help users catch typos fast)
     if adapter in {"openai_images", "openai_responses"}:

@@ -1,7 +1,7 @@
 ---
 name: image-generation-studio
 description: Generate or edit images with the image-generation-studio CLI through supported adapters (`gemini`, `openai_images`, `openai_responses`) and user-configured providers, endpoints, models, and aliases. Use this skill whenever the user wants to create, edit, compose, or restyle images — including prompts like "make an image", "generate a picture", "edit this photo", "combine these images", "4K poster", or mentions of configured image providers/models such as "nano banana", "Gemini image", "Grok image", "xAI image", "OpenAI image", "OpenAI Responses", "custom image provider", or "gpt-image".
-version: 1.0.0
+version: 1.0.2
 metadata:
   requires:
     bins: ["uv"]
@@ -50,12 +50,12 @@ uv run {baseDir}/scripts/generate.py --provider my-images-provider -p "add neon 
 uv run {baseDir}/scripts/generate.py --provider my-responses-provider -p "minimal product photo of a ceramic mug" -f mug.png --aspect-ratio 1:1
 
 # Temporary per-call endpoint/key override, without editing config.json
-uv run {baseDir}/scripts/generate.py --provider my-images-provider -p "..." -f out.png --api-url https://provider.example --api-key sk-xxx
+uv run {baseDir}/scripts/generate.py --provider my-images-provider -p "..." -f out.png --api-url https://provider.example --api-key "$MY_IMAGES_PROVIDER_API_KEY"
 ```
 
 ## Configuration
 
-Credentials are resolved per provider with precedence **CLI flag → env var → `<skill>/config.json`**. Provider names are converted to env var prefixes by uppercasing and replacing `-` with `_`: provider `my-images-provider` reads `MY_IMAGES_PROVIDER_API_KEY` and `MY_IMAGES_PROVIDER_API_URL`. Built-in provider names follow the same pattern, e.g. `gemini` → `GEMINI_API_KEY` / `GEMINI_API_URL`.
+Credentials are resolved per provider with precedence **CLI flag → env var → `<skill>/config.json`**. Prefer environment variables or per-call `--api-key` for secrets; store `api_key` in `config.json` only when the user explicitly accepts local secret storage. Provider names are converted to env var prefixes by uppercasing and replacing `-` with `_`: provider `my-images-provider` reads `MY_IMAGES_PROVIDER_API_KEY` and `MY_IMAGES_PROVIDER_API_URL`. Built-in provider names follow the same pattern, e.g. `gemini` → `GEMINI_API_KEY` / `GEMINI_API_URL`.
 
 Providers own credentials and default models; their `adapter` controls the request format. Model aliases are optional shortcuts to `{provider, model}`. Raw model IDs infer a known built-in provider from the model name when possible, otherwise they use the selected/default provider.
 
@@ -72,7 +72,6 @@ The file lives at `{baseDir}/config.json`. It may be empty, omitted, or as small
     "my-images-provider": {
       "adapter": "openai_images",
       "api_url": "https://provider.example",
-      "api_key": "sk-...",
       "default_model": "image-model-id"
     }
   },
@@ -85,7 +84,7 @@ The file lives at `{baseDir}/config.json`. It may be empty, omitted, or as small
 }
 ```
 
-Use `system_prompt` only when you want a global style / instruction prefix applied to every call. Gemini sends it as native `system_instruction`; `openai_images` and `openai_responses` prepend it to the user prompt with a blank line separator. Override per-call with `--system-prompt` / `--system`.
+Persistent `system_prompt` entries in `config.json` are intentionally ignored because they can become hidden global instructions for future calls. Use `--system-prompt` / `--system` only for instructions that should apply to the current invocation. Gemini sends the per-call value as native `system_instruction`; `openai_images` and `openai_responses` prepend it to the user prompt with a blank line separator.
 
 Supported adapters:
 
@@ -106,7 +105,7 @@ Before choosing flags:
 
 After resolving or choosing an adapter, read the matching adapter reference before recommending adapter-specific flags, debugging provider errors, or deciding whether image editing/composition is supported.
 
-`config.json` contains secrets if `api_key` is stored there. Do not distribute real local config files; ship an empty or sanitized config, or rely on env vars / CLI flags.
+`config.json` contains secrets if `api_key` is stored there. Do not distribute real local config files; ship an empty or sanitized config, or rely on env vars / CLI flags. Do not accept or persist `system_prompt` values from untrusted sources; the CLI ignores persisted `system_prompt` and only honors per-call `--system-prompt`.
 
 ## Common options
 
@@ -117,7 +116,7 @@ These options are shared by the CLI, though adapter references define which ones
 - `-p / --prompt` — prompt or edit instructions (required).
 - `-f / --filename` — output path (required). Parent directories are created automatically. Extension picks the final saved format: `.png`, `.jpg`, `.jpeg`, `.webp`; unknown extensions save as PNG. All adapters save through Pillow, so provider bytes may be re-encoded to match the extension.
 - `--api-key` / `--api-url` — temporary per-call credential or endpoint override.
-- `--system-prompt` / `--system` — global style/instruction override. Gemini sends it natively; OpenAI-compatible adapters prepend it to the prompt.
+- `--system-prompt` / `--system` — per-call style/instruction prefix. Gemini sends it natively; OpenAI-compatible adapters prepend it to the prompt.
 
 ## Adapter-specific options
 

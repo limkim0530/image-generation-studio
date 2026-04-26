@@ -115,7 +115,7 @@ provider 名称会转换为环境变量前缀：转为大写，并把 `-` 替换
 | `--size` | OpenAI Images 风格尺寸，例如 `1024x1024` 或 `1536x1024` |
 | `--quality` | OpenAI Images 风格质量参数 |
 | `--response-format` | OpenAI Images 风格返回格式，例如 `url` 或 `b64_json` |
-| `--system-prompt`, `--system` | 本次调用的全局风格/系统指令 |
+| `--system-prompt`, `--system` | 本次调用的风格/系统指令 |
 | `--search` | Gemini Nano 2 搜索 grounding 模式 |
 | `--thinking` | Gemini Nano 2 thinking 模式 |
 | `--stream` | Gemini 流式文本输出 |
@@ -145,4 +145,5 @@ provider 名称会转换为环境变量前缀：转为大写，并把 `-` 替换
 
 - 不要把真实 API Key 分发到 `config.json` 中。
 - 推荐使用环境变量或每次调用时传入 `--api-key` 管理密钥。
+- 不要把 `system_prompt` 持久化到 `config.json`；需要时只用 `--system-prompt` 作用于当前调用。
 - `SKILL.md` 保持通用说明，本地运行状态放在 `config.json`。
