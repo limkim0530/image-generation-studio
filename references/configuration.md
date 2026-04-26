@@ -4,6 +4,18 @@ Use this reference when the user wants to configure image-generation-studio prov
 
 The goal is to convert the user's natural-language description into a valid `{baseDir}/config.json` update. Keep `SKILL.md` generic for distribution; local `config.json` is user-specific runtime state.
 
+## Provider and model resolution
+
+The script chooses a provider/model at runtime from CLI flags and the user's local config:
+
+1. `-m / --model` can be a built-in alias, a user-defined alias from `config.json`, or a raw model ID.
+2. `--provider` can force a provider config by name. If both an alias and explicit provider are used, their adapters must be compatible.
+3. When no provider/model is specified, the script uses the runtime config's `default_provider` and that provider's `default_model`; if the config is empty, the script falls back to its built-in defaults.
+
+Model aliases resolve to `{provider, model}`, and each provider declares an adapter that controls the request format (`gemini`, `openai_images`, or `openai_responses`). Built-in aliases are convenience shortcuts; prefer user-defined aliases from `config.json` or explicit `--provider <name>` when the user has a custom provider/proxy. For repeatable results, prefer passing `-m <alias>` or `--provider <name>` explicitly instead of relying on implicit defaults.
+
+Persistent `system_prompt` entries in `config.json` are intentionally ignored because they can become hidden global instructions for future calls. Use `--system-prompt` / `--system` only for instructions that should apply to the current invocation. Gemini sends the per-call value as native `system_instruction`; `openai_images` and `openai_responses` prepend it to the user prompt with a blank line separator.
+
 ## Configuration shape
 
 `{baseDir}/config.json` may be missing, empty, or `{}`. Treat all of those as an empty config and write a normalized object like:

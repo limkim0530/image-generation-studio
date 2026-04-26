@@ -18,9 +18,9 @@ Usage examples:
     uv run generate.py -p "prompt" -f out.png                         # Gemini (default)
     uv run generate.py -m nano-banana-2 -p "prompt" -f out.png -r 2K  # Gemini Flash
     uv run generate.py -p "combine" -f out.png -i a.png -i b.png      # Gemini multi-image
-    uv run generate.py -m grok -p "prompt" -f out.jpg -r 2K           # xAI Grok Imagine
-    uv run generate.py -m grok -p "edit it" -f out.png -i src.jpg     # OpenAI Images edit
-    uv run generate.py -m gpt-image -p "prompt" -f out.png            # OpenAI Responses
+    uv run generate.py -m grok-imagine -p "prompt" -f out.jpg -r 2K           # xAI Grok Imagine
+    uv run generate.py -m grok-imagine -p "edit it" -f out.png -i src.jpg     # OpenAI Images edit
+    uv run generate.py -m gpt-image-2 -p "prompt" -f out.png            # OpenAI Responses
 """
 
 import argparse
@@ -48,25 +48,39 @@ BUILTIN_PROVIDER_DEFAULTS = {
     },
     "openai": {
         "adapter": "openai_responses",
-        "default_model": "gpt-4.1-mini",
+        "default_model": "gpt-image-2",
     },
 }
 
 BUILTIN_MODEL_ALIASES = {
     "nano-banana-pro": {"provider": "gemini", "model": "gemini-3-pro-image-preview"},
     "nano-banana-2": {"provider": "gemini", "model": "gemini-3.1-flash-image-preview"},
-    "grok": {"provider": "xai", "model": "grok-imagine-image"},
     "grok-imagine": {"provider": "xai", "model": "grok-imagine-image"},
-    "grok-pro": {"provider": "xai", "model": "grok-imagine-image-pro"},
     "grok-imagine-pro": {"provider": "xai", "model": "grok-imagine-image-pro"},
-    "grok-lite": {"provider": "xai", "model": "grok-imagine-image-lite"},
-    "grok-imagine-lite": {"provider": "xai", "model": "grok-imagine-image-lite"},
     "grok-2": {"provider": "xai", "model": "grok-2-image"},
-    "openai": {"provider": "openai", "model": "gpt-4.1-mini"},
-    "gpt-image": {"provider": "openai", "model": "gpt-4.1-mini"},
+    "gpt-image-2": {"provider": "openai", "model": "gpt-image-2"},
 }
 
 NANO2_ID = "gemini-3.1-flash-image-preview"
+
+OPTION_FLAGS = {
+    "inputs": ("-i", "--input"),
+    "number": ("-n", "--number"),
+    "resolution": ("-r", "--resolution"),
+    "aspect_ratio": ("--aspect-ratio",),
+    "size": ("--size",),
+    "quality": ("--quality",),
+    "output_format": ("--output-format",),
+    "output_compression": ("--output-compression",),
+    "background": ("--background",),
+    "moderation": ("--moderation",),
+    "response_format": ("--response-format",),
+    "action": ("--action",),
+    "search": ("--search",),
+    "thinking": ("--thinking",),
+    "stream": ("--stream",),
+}
+
 
 GEMINI_MODELS = {
     "gemini-3-pro-image-preview",
@@ -75,9 +89,7 @@ GEMINI_MODELS = {
 XAI_MODELS = {
     "grok-imagine-image",
     "grok-imagine-image-pro",
-    "grok-imagine-image-lite",
     "grok-2-image",
-    "grok-2-image-1212",
 }
 
 ASPECT_RATIOS = [
@@ -237,29 +249,34 @@ def die(msg: str, code: int = 1):
     sys.exit(code)
 
 
-def save_image(img_bytes: bytes, out_path: Path, pil_module) -> None:
-    """Save raw image bytes to out_path; format is picked from the file extension.
-    RGBA is flattened onto white for formats that can't carry alpha."""
+def save_image(img_bytes: bytes, out_path: Path, pil_module, quality: int | None = None) -> None:
     img = pil_module.open(BytesIO(img_bytes))
     ext = out_path.suffix.lower().lstrip(".")
     fmt = {"jpg": "JPEG", "jpeg": "JPEG", "png": "PNG", "webp": "WEBP"}.get(ext, "PNG")
+    save_kwargs = {"quality": quality} if fmt in {"JPEG", "WEBP"} and quality is not None else {}
     has_alpha = img.mode in {"RGBA", "LA"} or (img.mode == "P" and "transparency" in img.info)
     if fmt == "JPEG":
         if has_alpha:
             rgba = img.convert("RGBA")
             bg = pil_module.new("RGB", rgba.size, (255, 255, 255))
             bg.paste(rgba, mask=rgba.split()[-1])
-            bg.save(out_path, fmt)
+            bg.save(out_path, fmt, **save_kwargs)
         elif img.mode != "RGB":
-            img.convert("RGB").save(out_path, fmt)
+            img.convert("RGB").save(out_path, fmt, **save_kwargs)
         else:
-            img.save(out_path, fmt)
+            img.save(out_path, fmt, **save_kwargs)
     elif fmt in {"PNG", "WEBP"} and has_alpha:
-        img.convert("RGBA").save(out_path, fmt)
+        img.convert("RGBA").save(out_path, fmt, **save_kwargs)
     elif fmt == "PNG" and img.mode not in {"RGB", "RGBA", "L", "LA", "P"}:
-        img.convert("RGB").save(out_path, fmt)
+        img.convert("RGB").save(out_path, fmt, **save_kwargs)
     else:
-        img.save(out_path, fmt)
+        img.save(out_path, fmt, **save_kwargs)
+
+
+def numbered_output_path(out_path: Path, index: int) -> Path:
+    if index == 1:
+        return out_path
+    return out_path.with_name(f"{out_path.stem}-{index}{out_path.suffix}")
 
 
 # ---------------- CLI ----------------
@@ -279,27 +296,34 @@ def parse_args():
                         "Defaults to the selected provider's default_model.")
     p.add_argument("-i", "--input", dest="inputs", action="append", metavar="IMAGE",
                    help="Input image(s). Gemini: up to 14 for composition. "
-                        "openai_images: sends repeated image[] fields. openai_responses: unsupported.")
-    p.add_argument("-r", "--resolution", choices=["1K", "2K", "4K"], default="1K",
-                   help="1K/2K/4K. Gemini uses native image_size; OpenAI adapters map "
-                        "these to square sizes unless --size is provided.")
+                        "openai_images: sends repeated image[] fields. openai_responses: sends input_image content.")
+    p.add_argument("-n", "--number", type=int, default=1,
+                   help="OpenAI Images: number of images to request, sent as n. Defaults to 1.")
+    p.add_argument("-r", "--resolution",
+                   choices=["1K", "1K-portrait", "2K", "2K-portrait", "4K", "4K-portrait"],
+                   default="1K",
+                   help="Gemini uses native 1K/2K/4K image_size. OpenAI-compatible adapters "
+                        "map resolution presets to sizes unless --size is provided.")
     p.add_argument("--aspect-ratio", choices=ASPECT_RATIOS,
-                   help="Aspect ratio. Gemini and OpenAI Responses pass this through; "
-                        "openai_images uses --size instead.")
+                   help="Gemini aspect ratio. OpenAI-compatible adapters use --size instead.")
     p.add_argument("--size",
-                   help="OpenAI Images-compatible adapters: output size, e.g. auto, "
-                        "1024x1024, 1536x1024, 1024x1536")
+                   help="OpenAI-compatible adapters: output size, e.g. auto, "
+                        "1920x1088, 1088x1920, 2560x1440, 1440x2560, 3840x2160")
     p.add_argument("--quality", choices=["auto", "low", "medium", "high"], default="auto",
-                   help="OpenAI Images-compatible adapters: output quality")
+                   help="OpenAI-compatible adapters: output quality")
     p.add_argument("--output-format", choices=["png", "jpeg", "webp"],
-                   help="OpenAI Images-compatible adapters: requested output format. "
+                   help="OpenAI-compatible adapters: requested output format. "
                         "Defaults to the -f extension when possible, otherwise png.")
     p.add_argument("--output-compression", type=int,
-                   help="OpenAI Images-compatible adapters: compression level for jpeg/webp outputs")
+                   help="OpenAI Images: upstream compression for jpeg/webp. OpenAI Responses: local saved-file quality for jpeg/webp.")
+    p.add_argument("--background", choices=["auto", "transparent", "opaque"],
+                   help="OpenAI Responses image_generation background: auto, transparent, or opaque")
     p.add_argument("--moderation", choices=["auto", "low"], default="auto",
                    help="OpenAI Images-compatible adapters: moderation setting")
     p.add_argument("--response-format", choices=["url", "b64_json"],
                    help="OpenAI Images-compatible adapters: request url or b64_json responses when supported")
+    p.add_argument("--action", choices=["auto", "generate", "edit"],
+                   help="OpenAI Responses image_generation action. Defaults to edit with inputs, otherwise generate.")
     p.add_argument("--api-key",
                    help="Override provider-specific *_API_KEY env and config 'api_key'")
     p.add_argument("--api-url",
@@ -316,6 +340,58 @@ def parse_args():
                         "system_instruction; OpenAI-compatible adapters prepend it "
                         "to the user prompt.")
     return p.parse_args()
+
+
+def explicit_options(argv: list[str]) -> set[str]:
+    explicit = set()
+    for arg in argv:
+        for name, flags in OPTION_FLAGS.items():
+            for flag in flags:
+                if arg == flag or arg.startswith(f"{flag}="):
+                    explicit.add(name)
+    return explicit
+
+
+def warn_ignored_options(adapter: str, explicit: set[str], model: str) -> None:
+    ignored_by_adapter = {
+        "gemini": {
+            "size": "Gemini uses -r/--resolution and --aspect-ratio instead.",
+            "number": "Gemini does not send OpenAI Images n.",
+            "quality": "Gemini does not send OpenAI-compatible quality.",
+            "output_format": "Output file format is controlled by -f/--filename after saving.",
+            "output_compression": "Gemini does not send OpenAI-compatible output_compression.",
+            "background": "Gemini does not send OpenAI Responses background.",
+            "moderation": "Gemini does not send OpenAI-compatible moderation.",
+            "response_format": "Gemini returns inline image data through the SDK.",
+            "action": "Gemini infers generation/editing from whether input images are provided.",
+        },
+        "openai_images": {
+            "aspect_ratio": "OpenAI Images uses --size for shape control.",
+            "background": "OpenAI Images adapter does not send Responses image_generation background.",
+            "action": "OpenAI Images chooses generations vs edits from whether -i/--input is provided.",
+            "search": "Search grounding is Gemini-only.",
+            "thinking": "Thinking is Gemini Nano 2-only.",
+            "stream": "Streaming is Gemini-only in this wrapper.",
+        },
+        "openai_responses": {
+            "number": "Responses image_generation does not use OpenAI Images n.",
+            "aspect_ratio": "OpenAI Responses image_generation uses --size for shape control.",
+            "response_format": "Responses image_generation returns base64 result data; this wrapper extracts it directly.",
+            "search": "Search grounding is Gemini-only.",
+            "thinking": "Thinking is Gemini Nano 2-only.",
+            "stream": "Streaming is Gemini-only in this wrapper.",
+        },
+    }
+    for name, reason in ignored_by_adapter[adapter].items():
+        if name in explicit:
+            flag = OPTION_FLAGS[name][-1]
+            print(f"Warning: {flag} is ignored for adapter {adapter!r}. {reason}", file=sys.stderr)
+
+    if adapter == "gemini" and model != NANO2_ID:
+        for name in ("search", "thinking"):
+            if name in explicit:
+                flag = OPTION_FLAGS[name][-1]
+                print(f"Warning: {flag} is Nano 2-only; ignoring it for {model!r}.", file=sys.stderr)
 
 
 def iter_gemini_parts(response):
@@ -373,6 +449,9 @@ def gemini_generate(args, model: str, api_url: str | None, api_key: str, out_pat
                 die(f"Cannot open {path}: {e}")
 
     contents = [*input_imgs, args.prompt] if input_imgs else args.prompt
+
+    if args.resolution.endswith("-portrait"):
+        die("Gemini adapter only supports native image_size values 1K, 2K, or 4K. Use --aspect-ratio for portrait output.")
 
     image_cfg = {"image_size": args.resolution}
     if args.aspect_ratio:
@@ -524,9 +603,12 @@ def openai_images_size(args) -> str:
     if args.size:
         return args.size
     return {
-        "1K": "1024x1024",
-        "2K": "2048x2048",
-        "4K": "4096x4096",
+        "1K": "1920x1088",
+        "1K-portrait": "1088x1920",
+        "2K": "2560x1440",
+        "2K-portrait": "1440x2560",
+        "4K": "3840x2160",
+        "4K-portrait": "2160x3840",
     }[args.resolution]
 
 
@@ -543,6 +625,7 @@ def output_format_for(args, out_path: Path) -> str:
 
 def add_openai_image_fields(target: dict, args, out_path: Path, stringify: bool = False) -> None:
     values = {
+        "n": args.number,
         "size": openai_images_size(args),
         "quality": args.quality,
         "output_format": output_format_for(args, out_path),
@@ -615,23 +698,24 @@ def openai_images_generate(args, model: str, api_url: str | None, api_key: str, 
     if not data:
         die(f"OpenAI Images returned no image data. Raw: {json.dumps(result)[:500]}")
 
-    item = data[0]
-    revised = item.get("revised_prompt")
-    if revised:
-        print(f"Revised prompt: {revised}")
+    for index, item in enumerate(data, start=1):
+        revised = item.get("revised_prompt")
+        if revised:
+            print(f"Revised prompt {index}: {revised}")
 
-    if item.get("b64_json"):
-        img_bytes = base64.b64decode(item["b64_json"])
-    elif item.get("url"):
-        try:
-            img_bytes = _download_image_url(item["url"], api_key)
-        except Exception as e:
-            die(f"Cannot download image from {item['url']}: {e}")
-    else:
-        die(f"OpenAI Images response has no b64_json or url. Raw item: {json.dumps(item)[:300]}")
+        if item.get("b64_json"):
+            img_bytes = base64.b64decode(item["b64_json"])
+        elif item.get("url"):
+            try:
+                img_bytes = _download_image_url(item["url"], api_key)
+            except Exception as e:
+                die(f"Cannot download image from {item['url']}: {e}")
+        else:
+            die(f"OpenAI Images response item has no b64_json or url. Raw item: {json.dumps(item)[:300]}")
 
-    save_image(img_bytes, out_path, PILImage)
-    print(f"Saved: {out_path.resolve()}")
+        current_out_path = numbered_output_path(out_path, index)
+        save_image(img_bytes, current_out_path, PILImage)
+        print(f"Saved: {current_out_path.resolve()}")
 
 
 # ---------------- OpenAI Responses adapter ----------------
@@ -701,39 +785,53 @@ def _find_openai_response_image(value):
     return None
 
 
+def _response_input_image(path: Path) -> dict:
+    if not path.exists():
+        die(f"Input image not found: {path}")
+    data = base64.b64encode(path.read_bytes()).decode()
+    return {
+        "type": "input_image",
+        "image_url": f"data:{_image_mime_type(path)};base64,{data}",
+    }
+
+
 def openai_responses_generate(args, model: str, api_url: str | None, api_key: str, out_path: Path):
     from PIL import Image as PILImage
-
-    if args.inputs:
-        die("openai_responses adapter does not support input image editing yet.")
-    if args.search or args.thinking or args.stream:
-        print("Warning: --search, --thinking, and --stream are ignored by openai_responses.", file=sys.stderr)
 
     base = (api_url or "https://api.openai.com").rstrip("/")
     effective_prompt = (
         f"{args.system_prompt}\n\n{args.prompt}"
         if args.system_prompt else args.prompt
     )
+    input_payload = effective_prompt
+    if args.inputs:
+        content = [{"type": "input_text", "text": effective_prompt}]
+        content.extend(_response_input_image(Path(input_path)) for input_path in args.inputs)
+        input_payload = [{"role": "user", "content": content}]
+
     tool = {"type": "image_generation"}
+    tool["action"] = args.action or ("edit" if args.inputs else "generate")
     if args.resolution:
-        size_map = {
-            "1K": "1024x1024",
-            "2K": "2048x2048",
-            "4K": "4096x4096",
-        }
-        tool["size"] = size_map[args.resolution]
-    if args.aspect_ratio:
-        tool["aspect_ratio"] = args.aspect_ratio
+        tool["size"] = openai_images_size(args)
+    if args.quality:
+        tool["quality"] = args.quality
+    if args.moderation:
+        tool["moderation"] = args.moderation
+    if args.background:
+        tool["background"] = args.background
+    output_format = output_format_for(args, out_path)
+    tool["output_format"] = output_format
 
     payload = {
         "model": model,
-        "input": effective_prompt,
+        "input": input_payload,
         "tools": [tool],
     }
     headers = {"Authorization": f"Bearer {api_key}"}
     endpoint = f"{base}/v1/responses"
 
-    print(f"Generating with {model} via OpenAI Responses...")
+    verb = "Editing" if args.inputs else "Generating"
+    print(f"{verb} with {model} via OpenAI Responses...")
     result = _http_json(endpoint, headers, payload)
     image_b64 = _find_openai_response_image(result)
     if not image_b64:
@@ -744,14 +842,18 @@ def openai_responses_generate(args, model: str, api_url: str | None, api_key: st
     except Exception as e:
         die(f"Cannot decode OpenAI Responses image data: {e}")
 
-    save_image(img_bytes, out_path, PILImage)
+    save_quality = args.output_compression if output_format != "png" else None
+    save_image(img_bytes, out_path, PILImage, save_quality)
     print(f"Saved: {out_path.resolve()}")
 
 
 # ---------------- main ----------------
 
 def main():
+    explicit = explicit_options(sys.argv[1:])
     args = parse_args()
+    if args.number < 1:
+        die("--number must be at least 1.")
     cfg = load_config()
     provider, adapter, model = resolve_provider_adapter_model(args, cfg)
 
@@ -759,17 +861,7 @@ def main():
         print("Warning: config.json 'system_prompt' is ignored; pass --system-prompt for per-call instructions.", file=sys.stderr)
     args.system_prompt = args.system_prompt or None
 
-    # provider/adapter-mismatched flag warnings (non-fatal; help users catch typos fast)
-    if adapter in {"openai_images", "openai_responses"}:
-        bad = [f for f in ("search", "thinking", "stream") if getattr(args, f)]
-        if bad:
-            print("Warning: --" + ", --".join(bad) +
-                  f" are Gemini-only; ignored for adapter {adapter!r}.", file=sys.stderr)
-    else:
-        is_nano2 = model == NANO2_ID
-        if (args.search or args.thinking) and not is_nano2:
-            print(f"Warning: --search / --thinking are Nano 2 only; "
-                  f"ignoring them for {model!r}.", file=sys.stderr)
+    warn_ignored_options(adapter, explicit, model)
 
     api_url, api_key = resolve_credentials(args, cfg, provider)
     if not api_key:

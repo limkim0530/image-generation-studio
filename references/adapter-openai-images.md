@@ -20,7 +20,7 @@ For edits, each input is sent as a repeated multipart field named `image[]`.
 - Text-to-image generation.
 - Image editing when one or more `-i / --input` images are provided.
 - Multiple edit input images at the wrapper level, although provider/model support varies.
-- OpenAI Images-style size, quality, output format, moderation, compression, and response format fields.
+- OpenAI Images-style size, quality, output format, moderation, compression, response format, and image count fields.
 - URL image download with browser-like headers and retry with bearer auth on 401/403.
 
 ## Relevant CLI options
@@ -28,12 +28,13 @@ For edits, each input is sent as a repeated multipart field named `image[]`.
 | Option | Behavior |
 | --- | --- |
 | `--provider` | Selects a config provider whose adapter is `openai_images`. |
-| `-m`, `--model` | Model ID or alias. Built-in xAI aliases include `grok`, `grok-pro`, `grok-lite`, `grok-2`. |
+| `-m`, `--model` | Model ID or alias. |
 | `-p`, `--prompt` | Required prompt or edit instruction. |
 | `-f`, `--filename` | Required output path. Extension controls final saved format; parent directories are created automatically. |
 | `-i`, `--input` | Switches from generations to edits and sends each input as `image[]`. |
-| `-r`, `--resolution` | Maps to square sizes when `--size` is not provided: `1K` → `1024x1024`, `2K` → `2048x2048`, `4K` → `4096x4096`. |
-| `--size` | Overrides resolution mapping. Examples: `auto`, `1024x1024`, `1536x1024`, `1024x1536`. |
+| `-n`, `--number` | Sent as `n`; defaults to `1`. Multiple response images are saved as `file`, `file-2`, `file-3`, etc. |
+| `-r`, `--resolution` | Maps to sizes when `--size` is not provided: `1K` → `1920x1088`, `1K-portrait` → `1088x1920`, `2K` → `2560x1440`, `2K-portrait` → `1440x2560`, `4K` → `3840x2160`, `4K-portrait` → `2160x3840`. |
+| `--size` | Overrides resolution mapping. Examples: `auto`, `1920x1088`, `1088x1920`, `2560x1440`, `1440x2560`, `3840x2160`, `2160x3840`. |
 | `--quality` | Sent as `quality`; values: `auto`, `low`, `medium`, `high`. |
 | `--output-format` | Sent as `output_format`; defaults from `-f` extension when possible (`jpg` becomes `jpeg`). |
 | `--output-compression` | Sent only when output format is not `png`. |
@@ -43,13 +44,7 @@ For edits, each input is sent as a repeated multipart field named `image[]`.
 
 ## Ignored or irrelevant options
 
-The common CLI accepts Gemini-only flags, but the script warns and ignores them for this adapter:
-
-- `--search`
-- `--thinking`
-- `--stream`
-
-`--aspect-ratio` is accepted by the CLI but not included in OpenAI Images requests. Use `--size` for shape control.
+The script warns and ignores `--aspect-ratio`, `--background`, `--action`, `--search`, `--thinking`, and `--stream` for this adapter. Use `--size` for exact shape control; generation vs edit is selected by whether `-i / --input` is provided.
 
 ## Response handling
 

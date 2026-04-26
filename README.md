@@ -62,7 +62,7 @@ uv run scripts/generate.py --provider my-images-provider -p "add neon lights and
 Use an OpenAI Responses-compatible provider:
 
 ```bash
-uv run scripts/generate.py --provider my-responses-provider -p "minimal product photo of a ceramic mug" -f outputs/mug.png --aspect-ratio 1:1
+uv run scripts/generate.py --provider my-responses-provider -p "change the mug color to matte black" -f outputs/mug-edit.png -i outputs/mug.png --action edit --quality high
 ```
 
 ## Configuration
@@ -110,10 +110,16 @@ For detailed configuration guidance, see `references/configuration.md`.
 | `-p`, `--prompt` | Prompt or edit instruction; required |
 | `-f`, `--filename` | Output file path; required |
 | `-i`, `--input` | Input image path; repeatable for supported adapters |
-| `-r`, `--resolution` | `1K`, `2K`, or `4K` where supported |
-| `--aspect-ratio` | Aspect ratio such as `1:1`, `16:9`, or `9:16` |
-| `--size` | OpenAI Images-style size such as `1024x1024` or `1536x1024` |
-| `--quality` | OpenAI Images-style quality value |
+| `-n`, `--number` | OpenAI Images number of images to request; saved as `file`, `file-2`, `file-3`, etc. |
+| `-r`, `--resolution` | `1K`, `2K`, or `4K` where supported; OpenAI-compatible adapters also accept `*-portrait` presets |
+| `--aspect-ratio` | Gemini aspect ratio such as `1:1`, `16:9`, or `9:16`; OpenAI-compatible adapters use `--size` |
+| `--size` | OpenAI-compatible size such as `1920x1088`, `1088x1920`, `2560x1440`, `1440x2560`, `3840x2160`, or `2160x3840` |
+| `--quality` | OpenAI-compatible quality value |
+| `--moderation` | OpenAI-compatible moderation setting |
+| `--output-format` | OpenAI-compatible output format, such as `png`, `jpeg`, or `webp` |
+| `--output-compression` | OpenAI Images upstream compression, or local saved-file quality for Responses, for `jpeg`/`webp` outputs |
+| `--background` | OpenAI Responses image background: `auto`, `transparent`, or `opaque` |
+| `--action` | OpenAI Responses image action: `auto`, `generate`, or `edit` |
 | `--response-format` | OpenAI Images-style response format, such as `url` or `b64_json` |
 | `--system-prompt`, `--system` | Per-call instruction/style prefix |
 | `--search` | Gemini Nano 2 search grounding mode |

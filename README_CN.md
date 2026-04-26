@@ -62,7 +62,7 @@ uv run scripts/generate.py --provider my-images-provider -p "add neon lights and
 使用 OpenAI Responses 兼容 provider：
 
 ```bash
-uv run scripts/generate.py --provider my-responses-provider -p "minimal product photo of a ceramic mug" -f outputs/mug.png --aspect-ratio 1:1
+uv run scripts/generate.py --provider my-responses-provider -p "change the mug color to matte black" -f outputs/mug-edit.png -i outputs/mug.png --action edit --quality high
 ```
 
 ## 配置说明
@@ -110,10 +110,16 @@ provider 名称会转换为环境变量前缀：转为大写，并把 `-` 替换
 | `-p`, `--prompt` | 提示词或编辑指令；必填 |
 | `-f`, `--filename` | 输出文件路径；必填 |
 | `-i`, `--input` | 输入图片路径；可重复传入，取决于适配器是否支持 |
-| `-r`, `--resolution` | 支持时可用 `1K`、`2K`、`4K` |
-| `--aspect-ratio` | 宽高比，例如 `1:1`、`16:9`、`9:16` |
-| `--size` | OpenAI Images 风格尺寸，例如 `1024x1024` 或 `1536x1024` |
-| `--quality` | OpenAI Images 风格质量参数 |
+| `-n`, `--number` | OpenAI Images 请求图片数量；保存为 `file`、`file-2`、`file-3` 等 |
+| `-r`, `--resolution` | 支持时可用 `1K`、`2K`、`4K`；OpenAI 兼容适配器还支持 `*-portrait` 竖屏预设 |
+| `--aspect-ratio` | Gemini 宽高比，例如 `1:1`、`16:9`、`9:16`；OpenAI 兼容适配器使用 `--size` |
+| `--size` | OpenAI 兼容尺寸，例如 `1920x1088`、`1088x1920`、`2560x1440`、`1440x2560`、`3840x2160` 或 `2160x3840` |
+| `--quality` | OpenAI 兼容质量参数 |
+| `--moderation` | OpenAI 兼容审核参数 |
+| `--output-format` | OpenAI 兼容输出格式，例如 `png`、`jpeg` 或 `webp` |
+| `--output-compression` | OpenAI Images 上游压缩参数，或 Responses 本地保存质量参数，仅用于 `jpeg`/`webp` 输出 |
+| `--background` | OpenAI Responses 图片背景：`auto`、`transparent` 或 `opaque` |
+| `--action` | OpenAI Responses 图片动作：`auto`、`generate` 或 `edit` |
 | `--response-format` | OpenAI Images 风格返回格式，例如 `url` 或 `b64_json` |
 | `--system-prompt`, `--system` | 本次调用的风格/系统指令 |
 | `--search` | Gemini Nano 2 搜索 grounding 模式 |
