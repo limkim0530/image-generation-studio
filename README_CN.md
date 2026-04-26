@@ -18,7 +18,7 @@
 
 - Python 3.10+
 - PATH 中可用的 [`uv`](https://docs.astral.sh/uv/)
-- 图片 provider 的 API 凭据，可通过环境变量、CLI 参数或 `config.json` 提供
+- 所选图片 provider 的 API 凭据，可通过 CLI 参数、环境变量或 `config.json` 提供。内置 provider 可使用 `GEMINI_API_KEY`、`XAI_API_KEY` 或 `OPENAI_API_KEY`，但只需要当前命令所用 provider 的 key，环境变量不是必须的。
 
 脚本在文件头部声明了 Python 依赖：
 
@@ -94,7 +94,7 @@ uv run scripts/generate.py --provider my-responses-provider -p "change the mug c
 凭据解析优先级：
 
 1. CLI 参数：`--api-key`、`--api-url`
-2. provider 对应的环境变量，例如 `GEMINI_API_KEY`、`XAI_API_KEY`、`MY_IMAGES_PROVIDER_API_KEY`
+2. provider 对应的可选环境变量，例如 `GEMINI_API_KEY`、`XAI_API_KEY`、`MY_IMAGES_PROVIDER_API_KEY`
 3. `config.json` 中的 provider 配置
 
 provider 名称会转换为环境变量前缀：转为大写，并把 `-` 替换为 `_`。
@@ -150,6 +150,6 @@ provider 名称会转换为环境变量前缀：转为大写，并把 `-` 替换
 ## 分发注意事项
 
 - 不要把真实 API Key 分发到 `config.json` 中。
-- 推荐使用环境变量或每次调用时传入 `--api-key` 管理密钥。
+- 推荐使用每次调用时传入 `--api-key` 或环境变量管理密钥；只有在用户明确接受本地保存密钥时，才写入 `config.json`。
 - 不要把 `system_prompt` 持久化到 `config.json`；需要时只用 `--system-prompt` 作用于当前调用。
 - `SKILL.md` 保持通用说明，本地运行状态放在 `config.json`。

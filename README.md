@@ -18,7 +18,7 @@ Supported adapters:
 
 - Python 3.10+
 - [`uv`](https://docs.astral.sh/uv/) available in PATH
-- Provider API credentials, supplied through environment variables, CLI flags, or `config.json`
+- Provider API credentials for the selected provider, supplied through environment variables, CLI flags, or `config.json`. Built-in providers use `GEMINI_API_KEY`, `XAI_API_KEY`, or `OPENAI_API_KEY`; only the key for the provider used by a command is needed.
 
 The script declares its Python dependencies inline:
 
@@ -150,6 +150,6 @@ Adapter-specific support varies. Read the relevant reference before recommending
 ## Notes for distribution
 
 - Do not distribute real API keys in `config.json`.
-- Prefer environment variables or per-call `--api-key` for secrets.
+- It is recommended to pass `--api-key` with each call or manage keys via environment variables; write to `config.json` only when the user explicitly accepts local key storage.
 - Do not persist `system_prompt` in `config.json`; pass `--system-prompt` only for the current call.
 - Keep `SKILL.md` generic; use `config.json` for local runtime state.
