@@ -1,16 +1,19 @@
 # Image Generation Studio
 
-A skill for generating, editing, composing, and restyling images through a unified CLI. It supports Google Gemini image models, OpenAI Images-compatible endpoints, and OpenAI Responses-compatible image generation providers.
+An **LLM skill repository** for generating, editing, composing, and restyling images through a unified CLI. It supports Google Gemini image models, OpenAI Images-compatible endpoints, and OpenAI Responses-compatible image generation providers.
 
 ## What this skill does
 
-This repository lets an Agent call `scripts/generate.py` to create or edit images using user-configured providers, endpoints, models, and aliases. It is designed as a portable skill: `SKILL.md` documents the Agent-facing behavior, while `config.json` is local runtime configuration created only when a user configures providers or aliases.
+This repository lets an Agent call `scripts/generate.py` to create or edit images using user-configured providers, endpoints, models, and aliases. It is designed as a portable skill:
+- `SKILL.md` contains the Agent-facing instructions and skill metadata (name, description, triggering criteria)
+- `config.json` is local runtime configuration, created only when users configure custom providers or aliases
+- `references/*.md` files provide adapter-specific documentation loaded on demand
 
 Supported adapters:
 
 | Adapter | Provider/API shape | Best for |
 | --- | --- | --- |
-| `gemini` | Google GenAI `models.generate_content` / streaming API | Gemini image generation, image editing, multi-image composition, aspect ratio control, Nano Banana workflows |
+| `gemini` | Google GenAI `models.generate_content` / streaming API | Gemini image generation, image editing, multi-image composition, aspect ratio control, search grounding, thinking |
 | `openai_images` | OpenAI Images-compatible `/v1/images/generations` and `/v1/images/edits` | OpenAI Images-style providers, xAI/Grok Imagine, image edits through compatible endpoints |
 | `openai_responses` | OpenAI Responses `/v1/responses` with `image_generation` tool | Text-to-image through Responses-compatible providers |
 
@@ -86,10 +89,24 @@ Minimal example:
     "fast-image": {
       "provider": "my-images-provider",
       "model": "image-model-id"
+    },
+    "gemini-nano2-full": {
+      "provider": "gemini",
+      "model": "gemini-3.1-flash-image-preview",
+      "capabilities": ["search", "thinking"]
     }
   }
 }
 ```
+
+### Model alias capabilities
+
+The optional `capabilities` array enables advanced Gemini features:
+
+- `"search"` - Enables `--search` flag for Google Search grounding (web/image/both)
+- `"thinking"` - Enables `--thinking` flag for extended reasoning (minimal/high)
+
+Without declared capabilities, `--search` and `--thinking` flags are warned and ignored by the Gemini adapter. Other adapters do not use this field.
 
 Credentials are resolved with this precedence:
 
@@ -122,9 +139,11 @@ For detailed configuration guidance, see `references/configuration.md`.
 | `--action` | OpenAI Responses image action: `auto`, `generate`, or `edit` |
 | `--response-format` | OpenAI Images-style response format, such as `url` or `b64_json` |
 | `--system-prompt`, `--system` | Per-call instruction/style prefix |
-| `--search` | Gemini Nano 2 search grounding mode |
-| `--thinking` | Gemini Nano 2 thinking mode |
+| `--search` | Gemini search grounding mode (requires `search` capability declared in model alias) |
+| `--thinking` | Gemini thinking mode (requires `thinking` capability declared in model alias) |
 | `--stream` | Gemini streaming text output |
+
+Run with `-h` or `--help` to see all available options and their descriptions.
 
 Adapter-specific support varies. Read the relevant reference before recommending provider-specific flags:
 
@@ -134,9 +153,11 @@ Adapter-specific support varies. Read the relevant reference before recommending
 
 ## Repository layout
 
+This repository follows the standard skill structure:
+
 ```text
 .
-├── SKILL.md                         # Claude Code skill metadata and Agent instructions
+├── SKILL.md                         # Skill metadata (name, description, triggering) and Agent instructions
 ├── config.json                      # Local runtime config; created by users when needed and not distributed
 ├── scripts/
 │   └── generate.py                  # Unified image generation/editing CLI
@@ -147,10 +168,15 @@ Adapter-specific support varies. Read the relevant reference before recommending
     └── adapter-openai-responses.md  # OpenAI Responses-compatible adapter behavior
 ```
 
+**Skill loading behavior:**
+1. **Metadata** (SKILL.md frontmatter: name + description) - Always in context for skill triggering
+2. **SKILL.md body** - Loaded when skill is invoked
+3. **Bundled resources** (references/, scripts/) - Loaded on demand as referenced by SKILL.md
+
 ## Notes for distribution
 
-- Do not distribute `config.json`; it is user-specific runtime state and should be created locally when needed.
-- Do not distribute real API keys in any file.
-- It is recommended to pass `--api-key` with each call or manage keys via environment variables; write keys to local `config.json` only when the user explicitly accepts local key storage.
-- Do not persist `system_prompt` in `config.json`; pass `--system-prompt` only for the current call.
-- Keep `SKILL.md` generic; use local `config.json` for runtime state.
+When distributing this skill:
+- **Do not include `config.json`** - it contains user-specific runtime state and possibly API keys
+- Include `SKILL.md`, `scripts/`, and `references/` directories
+- Users create their own `config.json` locally when they configure providers
+- Package using Claude Code's skill packaging system if available

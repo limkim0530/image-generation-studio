@@ -8,11 +8,11 @@ The goal is to convert the user's natural-language description into a valid loca
 
 The script chooses a provider/model at runtime from CLI flags and the user's local config:
 
-1. `-m / --model` can be a built-in alias, a user-defined alias from `config.json`, or a raw model ID.
+1. `-m / --model` can be a user-defined alias from `config.json`, or a raw model ID.
 2. `--provider` can force a provider config by name. If both an alias and explicit provider are used, their adapters must be compatible.
-3. When no provider/model is specified, the script uses the runtime config's `default_provider` and that provider's `default_model`; if the config is empty, the script falls back to its built-in defaults.
+3. When no provider/model is specified, the script uses the runtime config's `default_provider` and that provider's `default_model`; if the config is empty, the script falls back to `gemini` as the default provider.
 
-Model aliases resolve to `{provider, model}`, and each provider declares an adapter that controls the request format (`gemini`, `openai_images`, or `openai_responses`). Built-in aliases are convenience shortcuts; prefer user-defined aliases from `config.json` or explicit `--provider <name>` when the user has a custom provider/proxy. For repeatable results, prefer passing `-m <alias>` or `--provider <name>` explicitly instead of relying on implicit defaults.
+Model aliases resolve to `{provider, model, capabilities}`, and each provider declares an adapter that controls the request format (`gemini`, `openai_images`, or `openai_responses`). Prefer user-defined aliases from `config.json` or explicit `--provider <name>` when the user has a custom provider/proxy. For repeatable results, prefer passing `-m <alias>` or `--provider <name>` explicitly instead of relying on implicit defaults.
 
 Persistent `system_prompt` entries in `config.json` are intentionally ignored because they can become hidden global instructions for future calls. Use `--system-prompt` / `--system` only for instructions that should apply to the current invocation. Gemini sends the per-call value as native `system_instruction`; `openai_images` and `openai_responses` prepend it to the user prompt with a blank line separator.
 
@@ -34,10 +34,24 @@ Persistent `system_prompt` entries in `config.json` are intentionally ignored be
     "friendly-alias": {
       "provider": "my-provider",
       "model": "image-model-id"
+    },
+    "gemini-nano2-full": {
+      "provider": "gemini",
+      "model": "gemini-3.1-flash-image-preview",
+      "capabilities": ["search", "thinking"]
     }
   }
 }
 ```
+
+### Model alias capabilities
+
+The optional `capabilities` array enables advanced Gemini features:
+
+- `"search"` - Enables `--search` flag for Google Search grounding (web/image/both)
+- `"thinking"` - Enables `--thinking` flag for extended reasoning (minimal/high)
+
+Without declared capabilities, `--search` and `--thinking` flags are warned and ignored by the Gemini adapter. Other adapters do not use this field.
 
 Keep existing providers and aliases unless the user asks to replace or remove them. Do not preserve or write top-level `system_prompt`; the CLI ignores persisted system prompts and only honors per-call `--system-prompt`.
 
@@ -65,6 +79,7 @@ Extract these fields when present:
 - api_key: secret token. Prefer the provider-specific environment variable or per-call `--api-key`; store it in config only if the user explicitly accepts local secret storage.
 - default_model: the model ID to use by default for that provider.
 - alias: a friendly name under `models`, often the same as the model ID or user phrase like `fast-image`.
+- capabilities: optional array for model aliases. Valid values: `"search"`, `"thinking"` (Gemini only). Enables advanced features when declared.
 - default_provider: set it when the user says this should be the default, or when configuring the first provider in an empty config.
 - system_prompt: do not write this to config. If the user wants a style/instruction prefix, use `--system-prompt` for that single call.
 
@@ -150,7 +165,7 @@ Config update:
     }
   },
   "models": {
-    "nano-banana-pro": {
+    "gemini-pro": {
       "provider": "gemini",
       "model": "gemini-3-pro-image-preview"
     }

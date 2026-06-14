@@ -8,19 +8,19 @@
 # ///
 """Generate or edit images via one unified CLI across provider adapters:
 
-- Google Gemini (Nano Banana Pro, Nano Banana 2) — via google-genai SDK.
-- OpenAI Images-compatible endpoints such as xAI Grok Imagine — via stdlib urllib.
-- OpenAI Responses image generation — via stdlib urllib.
+- Google Gemini (Imagen 3 models) - via google-genai SDK.
+- OpenAI Images-compatible endpoints such as xAI Grok Imagine - via stdlib urllib.
+- OpenAI Responses image generation - via stdlib urllib.
 
 Provider is selected from aliases, explicit provider config, or raw model inference.
 
 Usage examples:
-    uv run generate.py -p "prompt" -f out.png                         # Gemini (default)
-    uv run generate.py -m nano-banana-2 -p "prompt" -f out.png -r 2K  # Gemini Flash
-    uv run generate.py -p "combine" -f out.png -i a.png -i b.png      # Gemini multi-image
-    uv run generate.py -m grok-imagine -p "prompt" -f out.jpg -r 2K           # xAI Grok Imagine
-    uv run generate.py -m grok-imagine -p "edit it" -f out.png -i src.jpg     # OpenAI Images edit
-    uv run generate.py -m gpt-image-2 -p "prompt" -f out.png            # OpenAI Responses
+    uv run generate.py -p "prompt" -f out.png                                # Gemini (default)
+    uv run generate.py -m gemini-3.1-flash-image-preview -p "prompt" -f out.png -r 2K  # Gemini Flash
+    uv run generate.py -p "combine" -f out.png -i a.png -i b.png             # Gemini multi-image
+    uv run generate.py -m grok-imagine -p "prompt" -f out.jpg -r 2K          # xAI Grok Imagine
+    uv run generate.py -m grok-imagine -p "edit it" -f out.png -i src.jpg    # OpenAI Images edit
+    uv run generate.py -m gpt-image-2 -p "prompt" -f out.png                 # OpenAI Responses
 """
 
 import argparse
@@ -52,16 +52,7 @@ BUILTIN_PROVIDER_DEFAULTS = {
     },
 }
 
-BUILTIN_MODEL_ALIASES = {
-    "nano-banana-pro": {"provider": "gemini", "model": "gemini-3-pro-image-preview"},
-    "nano-banana-2": {"provider": "gemini", "model": "gemini-3.1-flash-image-preview"},
-    "grok-imagine": {"provider": "xai", "model": "grok-imagine-image"},
-    "grok-imagine-pro": {"provider": "xai", "model": "grok-imagine-image-pro"},
-    "grok-2": {"provider": "xai", "model": "grok-2-image"},
-    "gpt-image-2": {"provider": "openai", "model": "gpt-image-2"},
-}
-
-NANO2_ID = "gemini-3.1-flash-image-preview"
+BUILTIN_MODEL_ALIASES = {}
 
 OPTION_FLAGS = {
     "inputs": ("-i", "--input"),
@@ -113,6 +104,11 @@ def merged_providers(cfg: dict) -> dict:
 
 
 def merged_model_aliases(cfg: dict) -> dict:
+    """Merge built-in and user-defined model aliases.
+
+    Returns dict mapping alias -> {provider, model, capabilities}.
+    capabilities is a list of feature names like ['search', 'thinking'].
+    """
     aliases = {name: dict(value) for name, value in BUILTIN_MODEL_ALIASES.items()}
     configured = cfg.get("models")
     if isinstance(configured, dict):
@@ -121,11 +117,17 @@ def merged_model_aliases(cfg: dict) -> dict:
                 aliases[name.lower()] = {
                     "provider": value["provider"],
                     "model": value["model"],
+                    "capabilities": value.get("capabilities", []),
                 }
     return aliases
 
 
-def resolve_provider_adapter_model(args, cfg: dict) -> tuple[str, str, str]:
+def resolve_provider_adapter_model(args, cfg: dict) -> tuple[str, str, str, list[str]]:
+    """Resolve provider, adapter, model, and capabilities from args and config.
+
+    Returns (provider, adapter, model, capabilities).
+    capabilities is a list of feature names declared in the model alias, e.g. ['search', 'thinking'].
+    """
     providers = merged_providers(cfg)
     aliases = merged_model_aliases(cfg)
 
@@ -139,7 +141,7 @@ def resolve_provider_adapter_model(args, cfg: dict) -> tuple[str, str, str]:
     def provider_config(name: str) -> dict:
         provider_cfg = providers.get(name)
         if not provider_cfg:
-            die(f"Unknown provider {name!r}. Add it to providers in {CONFIG_PATH}.")
+            die(f"Unknown provider {name!r}. Run with --list-config to see configured providers.")
         return provider_cfg
 
     def provider_adapter(name: str) -> str:
@@ -148,12 +150,14 @@ def resolve_provider_adapter_model(args, cfg: dict) -> tuple[str, str, str]:
             die(f"Provider {name!r} uses unsupported adapter {adapter_name!r}.")
         return adapter_name
 
+    capabilities = []
     model_arg = args.model
     if model_arg:
         alias = aliases.get(model_arg.strip().lower())
         if alias:
             alias_provider = alias["provider"]
             model = alias["model"]
+            capabilities = alias.get("capabilities", [])
             if explicit_provider and explicit_provider != alias_provider:
                 explicit_adapter = provider_adapter(explicit_provider)
                 alias_adapter = provider_adapter(alias_provider)
@@ -180,7 +184,7 @@ def resolve_provider_adapter_model(args, cfg: dict) -> tuple[str, str, str]:
             die(f"Provider {provider!r} has no default_model; pass --model.")
 
     adapter = provider_adapter(provider)
-    return provider, adapter, model
+    return provider, adapter, model, capabilities
 
 
 def known_provider_for(model: str) -> str | None:
@@ -216,14 +220,19 @@ def get_provider_config(cfg: dict, provider: str) -> dict:
     return provider_cfg
 
 
-def resolve_credentials(args, cfg: dict, provider: str) -> tuple[str | None, str | None]:
-    """Resolve (api_url, api_key) for the chosen provider with precedence:
-    CLI flag → provider-specific env var → config.json."""
-    env_prefix = {
+def env_prefix_for(provider: str) -> str:
+    """Provider name → env var prefix (e.g. 'my-provider' → 'MY_PROVIDER')."""
+    return {
         "gemini": "GEMINI",
         "xai": "XAI",
         "openai": "OPENAI",
     }.get(provider, provider.upper().replace("-", "_"))
+
+
+def resolve_credentials(args, cfg: dict, provider: str) -> tuple[str | None, str | None]:
+    """Resolve (api_url, api_key) for the chosen provider with precedence:
+    CLI flag → provider-specific env var → config.json."""
+    env_prefix = env_prefix_for(provider)
     env_key = f"{env_prefix}_API_KEY"
     env_url = f"{env_prefix}_API_URL"
     key = args.api_key or os.environ.get(env_key)
@@ -285,14 +294,19 @@ def parse_args():
     p = argparse.ArgumentParser(
         description="Generate / edit images with Gemini, OpenAI Images-compatible providers, or OpenAI Responses."
     )
-    p.add_argument("-p", "--prompt", required=True, help="Prompt or edit instructions")
-    p.add_argument("-f", "--filename", required=True,
-                   help="Output path (.png/.jpg/.webp - extension picks the format)")
+    p.add_argument("-p", "--prompt", help="Prompt or edit instructions (required unless --list-config)")
+    p.add_argument("-f", "--filename",
+                   help="Output path (.png/.jpg/.webp - extension picks the format); "
+                        "required unless --list-config")
+    p.add_argument("--list-config", action="store_true",
+                   help="Print resolved providers, aliases, defaults, and credential sources "
+                        "(sanitized - never prints key values), then exit. Does not read or "
+                        "generate images.")
     p.add_argument("--provider", default="auto",
                    help="Provider config name to use, or auto. Auto uses model aliases, "
                         "then raw model-name inference, then config default_provider.")
     p.add_argument("-m", "--model",
-                   help="Model alias from built-ins/config, or raw model ID. "
+                   help="Model alias from config.json, or raw model ID. "
                         "Defaults to the selected provider's default_model.")
     p.add_argument("-i", "--input", dest="inputs", action="append", metavar="IMAGE",
                    help="Input image(s). Gemini: up to 14 for composition. "
@@ -330,9 +344,11 @@ def parse_args():
                    help="Override provider base URL. Falls back to *_API_URL env, "
                         "then config 'api_url', then adapter default when available.")
     p.add_argument("--search", choices=["web", "image", "both"],
-                   help="Nano 2 only: Google Search grounding (web / image / both)")
+                   help="Gemini only: Google Search grounding (web / image / both). "
+                        "Requires 'search' capability declared in the model alias.")
     p.add_argument("--thinking", choices=["minimal", "high"],
-                   help="Nano 2 only: thinking level. minimal sends budget 0; high sends budget -1")
+                   help="Gemini only: thinking level. Requires 'thinking' capability declared in the model alias. "
+                        "minimal sends budget 0; high sends budget -1")
     p.add_argument("--stream", action="store_true",
                    help="Gemini only: stream text chunks live; image still writes at end")
     p.add_argument("--system-prompt", "--system", dest="system_prompt",
@@ -352,7 +368,11 @@ def explicit_options(argv: list[str]) -> set[str]:
     return explicit
 
 
-def warn_ignored_options(adapter: str, explicit: set[str], model: str) -> None:
+def warn_ignored_options(adapter: str, explicit: set[str], capabilities: list[str]) -> None:
+    """Warn about CLI flags that are ignored by the selected adapter or lack declared capabilities.
+
+    capabilities is the list from the model alias, e.g. ['search', 'thinking'].
+    """
     ignored_by_adapter = {
         "gemini": {
             "size": "Gemini uses -r/--resolution and --aspect-ratio instead.",
@@ -370,7 +390,7 @@ def warn_ignored_options(adapter: str, explicit: set[str], model: str) -> None:
             "background": "OpenAI Images adapter does not send Responses image_generation background.",
             "action": "OpenAI Images chooses generations vs edits from whether -i/--input is provided.",
             "search": "Search grounding is Gemini-only.",
-            "thinking": "Thinking is Gemini Nano 2-only.",
+            "thinking": "Thinking is Gemini-only.",
             "stream": "Streaming is Gemini-only in this wrapper.",
         },
         "openai_responses": {
@@ -378,7 +398,7 @@ def warn_ignored_options(adapter: str, explicit: set[str], model: str) -> None:
             "aspect_ratio": "OpenAI Responses image_generation uses --size for shape control.",
             "response_format": "Responses image_generation returns base64 result data; this wrapper extracts it directly.",
             "search": "Search grounding is Gemini-only.",
-            "thinking": "Thinking is Gemini Nano 2-only.",
+            "thinking": "Thinking is Gemini-only.",
             "stream": "Streaming is Gemini-only in this wrapper.",
         },
     }
@@ -387,11 +407,12 @@ def warn_ignored_options(adapter: str, explicit: set[str], model: str) -> None:
             flag = OPTION_FLAGS[name][-1]
             print(f"Warning: {flag} is ignored for adapter {adapter!r}. {reason}", file=sys.stderr)
 
-    if adapter == "gemini" and model != NANO2_ID:
-        for name in ("search", "thinking"):
-            if name in explicit:
-                flag = OPTION_FLAGS[name][-1]
-                print(f"Warning: {flag} is Nano 2-only; ignoring it for {model!r}.", file=sys.stderr)
+    # Warn if Gemini adapter but model lacks declared capability
+    if adapter == "gemini":
+        for feature in ("search", "thinking"):
+            if feature in explicit and feature not in capabilities:
+                flag = OPTION_FLAGS[feature][-1]
+                print(f"Warning: {flag} requires the '{feature}' capability declared in the model alias; ignoring.", file=sys.stderr)
 
 
 def iter_gemini_parts(response):
@@ -422,12 +443,14 @@ def build_google_search(types_mod, mode: str):
         return types_mod.GoogleSearch()
 
 
-def gemini_generate(args, model: str, api_url: str | None, api_key: str, out_path: Path):
+def gemini_generate(args, model: str, api_url: str | None, api_key: str, out_path: Path, capabilities: list[str]):
+    """Generate image via Gemini adapter.
+
+    capabilities declares which advanced features (search, thinking) are supported by this model.
+    """
     from google import genai
     from google.genai import types
     from PIL import Image as PILImage
-
-    is_nano2 = model == NANO2_ID
 
     client_kwargs = {"api_key": api_key}
     if api_url:
@@ -463,12 +486,11 @@ def gemini_generate(args, model: str, api_url: str | None, api_key: str, out_pat
     }
     if args.system_prompt:
         gen_cfg["system_instruction"] = args.system_prompt
-    if is_nano2:
-        if args.search:
-            gen_cfg["tools"] = [types.Tool(google_search=build_google_search(types, args.search))]
-        if args.thinking:
-            budget = -1 if args.thinking == "high" else 0
-            gen_cfg["thinking_config"] = types.ThinkingConfig(thinking_budget=budget)
+    if "search" in capabilities and args.search:
+        gen_cfg["tools"] = [types.Tool(google_search=build_google_search(types, args.search))]
+    if "thinking" in capabilities and args.thinking:
+        budget = -1 if args.thinking == "high" else 0
+        gen_cfg["thinking_config"] = types.ThinkingConfig(thinking_budget=budget)
 
     verb = "Streaming" if args.stream else ("Processing" if input_imgs else "Generating")
     suffix = f" {len(input_imgs)} input image(s)" if input_imgs else ""
@@ -528,7 +550,7 @@ def gemini_generate(args, model: str, api_url: str | None, api_key: str, out_pat
 def _build_multipart(fields: dict, files: list[tuple[str, str, bytes, str]]) -> tuple[bytes, str]:
     """Return (body, boundary) for multipart/form-data.
     files is a list of (field_name, filename, content_bytes, content_type)."""
-    boundary = "----nano-banana-" + secrets.token_hex(12)
+    boundary = "----WebKitFormBoundary" + secrets.token_hex(12)
     parts: list[bytes] = []
     for name, value in fields.items():
         if value is None:
@@ -833,32 +855,84 @@ def openai_responses_generate(args, model: str, api_url: str | None, api_key: st
     print(f"Saved: {out_path.resolve()}")
 
 
+# ---------------- config discovery ----------------
+
+def key_source_for(cfg: dict, provider: str) -> str:
+    """Describe where the api key would come from, without revealing its value.
+    Mirrors resolve_credentials precedence: env var → config.json → none."""
+    env_name = f"{env_prefix_for(provider)}_API_KEY"
+    if os.environ.get(env_name):
+        return f"env ({env_name})"
+    if get_provider_config(cfg, provider).get("api_key"):
+        return "config.json (stored locally)"
+    return f"none - set {env_name} or pass --api-key"
+
+
+def list_config(cfg: dict) -> None:
+    """Print resolved providers, aliases, defaults, and credential sources.
+
+    Sanitized by construction: this reads config.json but only reports the
+    presence and source of secrets, never their values. Lets the agent
+    discover configuration without pulling key material into its context.
+    """
+    providers = merged_providers(cfg)
+    aliases = merged_model_aliases(cfg)
+    default_provider = cfg.get("default_provider") or "gemini (built-in fallback)"
+
+    print(f"config.json: {CONFIG_PATH} ({'present' if CONFIG_PATH.exists() else 'missing - using built-in defaults'})")
+    print(f"default_provider: {default_provider}")
+
+    print("\nProviders:")
+    for name in sorted(providers):
+        pcfg = providers[name]
+        adapter = pcfg.get("adapter") or name
+        url = pcfg.get("api_url") or f"env {env_prefix_for(name)}_API_URL / adapter default"
+        print(f"  {name}")
+        print(f"    adapter:       {adapter}")
+        print(f"    default_model: {pcfg.get('default_model') or '(none - pass --model)'}")
+        print(f"    api_url:       {url}")
+        print(f"    api_key:       {key_source_for(cfg, name)}")
+
+    print("\nModel aliases (alias -> provider / model [capabilities]):")
+    for alias in sorted(aliases):
+        target = aliases[alias]
+        caps = target.get("capabilities", [])
+        caps_str = f" [{', '.join(caps)}]" if caps else ""
+        print(f"  {alias} -> {target['provider']} / {target['model']}{caps_str}")
+
+    if cfg.get("system_prompt"):
+        print("\nNote: config.json 'system_prompt' is present but ignored at runtime; "
+              "pass --system-prompt for per-call instructions.")
+
+
 # ---------------- main ----------------
 
 def main():
     explicit = explicit_options(sys.argv[1:])
     args = parse_args()
+    cfg = load_config()
+
+    if args.list_config:
+        list_config(cfg)
+        return
+
+    if args.prompt is None or args.filename is None:
+        die("-p/--prompt and -f/--filename are required (omit them only with --list-config).")
     if args.number < 1:
         die("--number must be at least 1.")
-    cfg = load_config()
-    provider, adapter, model = resolve_provider_adapter_model(args, cfg)
+    provider, adapter, model, capabilities = resolve_provider_adapter_model(args, cfg)
 
     if cfg.get("system_prompt"):
         print("Warning: config.json 'system_prompt' is ignored; pass --system-prompt for per-call instructions.", file=sys.stderr)
     args.system_prompt = args.system_prompt or None
 
-    warn_ignored_options(adapter, explicit, model)
+    warn_ignored_options(adapter, explicit, capabilities)
 
     api_url, api_key = resolve_credentials(args, cfg, provider)
     if not api_key:
-        env_prefix = {
-            "gemini": "GEMINI",
-            "xai": "XAI",
-            "openai": "OPENAI",
-        }.get(provider, provider.upper().replace("-", "_"))
-        env_name = f"{env_prefix}_API_KEY"
-        die(f"No API key for provider {provider!r}. Pass --api-key, set {env_name}, "
-            f"or add providers.{provider}.api_key to {CONFIG_PATH}.")
+        env_name = f"{env_prefix_for(provider)}_API_KEY"
+        die(f"No API key for provider {provider!r}. Set {env_name} or pass --api-key. "
+            f"Run with --list-config to see configured providers and credential sources.")
 
     out_path = Path(args.filename)
     out_path.parent.mkdir(parents=True, exist_ok=True)
@@ -868,7 +942,7 @@ def main():
     elif adapter == "openai_responses":
         openai_responses_generate(args, model, api_url, api_key, out_path)
     else:
-        gemini_generate(args, model, api_url, api_key, out_path)
+        gemini_generate(args, model, api_url, api_key, out_path, capabilities)
 
 
 if __name__ == "__main__":

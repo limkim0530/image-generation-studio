@@ -1,10 +1,13 @@
 # Image Generation Studio
 
-这是一个图片生成 Skill 仓库，可以让 Agent 通过统一的 CLI 生成、编辑、合成和重绘图片。它支持 Google Gemini 图片模型、OpenAI Images 兼容接口，以及 OpenAI Responses 兼容的图片生成接口。
+这是一个 **LLM Skill 仓库**，可以让 Agent 通过统一的 CLI 生成、编辑、合成和重绘图片。它支持 Google Gemini 图片模型、OpenAI Images 兼容接口，以及 OpenAI Responses 兼容的图片生成接口。
 
 ## 这个 Skill 能做什么
 
-本仓库让 Agent 调用 `scripts/generate.py`，并根据用户配置的 provider、endpoint、model 和 alias 来生成或编辑图片。它适合作为可分发的 Skill：`SKILL.md` 负责描述 Agent 使用方式，`config.json` 是用户配置 provider 或 alias 时才在本地创建的运行配置。
+本仓库让 Agent 调用 `scripts/generate.py`，并根据用户配置的 provider、endpoint、model 和 alias 来生成或编辑图片。它设计为可移植的 Skill：
+- `SKILL.md` 包含 Agent 使用说明和 Skill 元数据（名称、描述、触发条件）
+- `config.json` 是本地运行配置，仅在用户配置自定义 provider 或 alias 时创建
+- `references/*.md` 文件提供适配器专属文档，按需加载
 
 支持的适配器：
 
@@ -86,10 +89,24 @@ uv run scripts/generate.py --provider my-responses-provider -p "change the mug c
     "fast-image": {
       "provider": "my-images-provider",
       "model": "image-model-id"
+    },
+    "gemini-nano2-full": {
+      "provider": "gemini",
+      "model": "gemini-3.1-flash-image-preview",
+      "capabilities": ["search", "thinking"]
     }
   }
 }
 ```
+
+### 模型别名的 capabilities 字段
+
+可选的 `capabilities` 数组用于启用 Gemini 高级功能：
+
+- `"search"` - 启用 `--search` 参数进行 Google 搜索 grounding（web/image/both）
+- `"thinking"` - 启用 `--thinking` 参数进行扩展推理（minimal/high）
+
+如果未声明 capabilities，Gemini 适配器会警告并忽略 `--search` 和 `--thinking` 参数。其他适配器不使用此字段。
 
 凭据解析优先级：
 
@@ -122,9 +139,11 @@ provider 名称会转换为环境变量前缀：转为大写，并把 `-` 替换
 | `--action` | OpenAI Responses 图片动作：`auto`、`generate` 或 `edit` |
 | `--response-format` | OpenAI Images 风格返回格式，例如 `url` 或 `b64_json` |
 | `--system-prompt`, `--system` | 本次调用的风格/系统指令 |
-| `--search` | Gemini Nano 2 搜索 grounding 模式 |
-| `--thinking` | Gemini Nano 2 thinking 模式 |
+| `--search` | Gemini 搜索 grounding 模式（需要在 model alias 中声明 `capabilities`） |
+| `--thinking` | Gemini thinking 模式（需要在 model alias 中声明 `capabilities`） |
 | `--stream` | Gemini 流式文本输出 |
+
+运行 `-h` 或 `--help` 查看所有可用参数及说明。
 
 不同适配器支持的参数不同。推荐 provider 专属参数前，请先阅读对应参考文档：
 
@@ -134,9 +153,11 @@ provider 名称会转换为环境变量前缀：转为大写，并把 `-` 替换
 
 ## 仓库结构
 
+这个仓库遵循标准的 Skill 结构：
+
 ```text
 .
-├── SKILL.md                         # Claude Code Skill 元数据和 Agent 使用说明
+├── SKILL.md                         # Skill 元数据（名称、描述、触发条件）和 Agent 使用说明
 ├── config.json                      # 本地运行配置；用户需要时创建，不随 Skill 分发
 ├── scripts/
 │   └── generate.py                  # 统一的图片生成/编辑 CLI
@@ -147,10 +168,15 @@ provider 名称会转换为环境变量前缀：转为大写，并把 `-` 替换
     └── adapter-openai-responses.md  # OpenAI Responses 兼容适配器行为说明
 ```
 
+**Skill 加载机制：**
+1. **元数据**（SKILL.md frontmatter：name + description）- 始终在上下文中，用于 Skill 触发判断
+2. **SKILL.md 主体** - 当 Skill 被调用时加载
+3. **打包资源**（references/、scripts/）- 根据 SKILL.md 引用按需加载
+
 ## 分发注意事项
 
-- 不要分发 `config.json`；它是用户专属的本地运行状态，需要时再创建。
-- 不要在任何文件里分发真实 API Key。
-- 推荐使用每次调用时传入 `--api-key` 或环境变量管理密钥；只有在用户明确接受本地保存密钥时，才写入本地 `config.json`。
-- 不要把 `system_prompt` 持久化到 `config.json`；需要时只用 `--system-prompt` 作用于当前调用。
-- `SKILL.md` 保持通用说明，本地运行状态放在本地 `config.json`。
+分发此 Skill 时：
+- **不要包含 `config.json`** - 它包含用户专属的运行状态，可能含有 API 密钥
+- 包含 `SKILL.md`、`scripts/` 和 `references/` 目录
+- 用户在本地配置 provider 时会自行创建 `config.json`
+- 如果可用，使用 Claude Code 的 skill 打包系统进行打包

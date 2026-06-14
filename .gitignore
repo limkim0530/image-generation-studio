@@ -1,3 +1,4 @@
 /outputs
 /.claude
 config.json
+/scripts/__pycache__

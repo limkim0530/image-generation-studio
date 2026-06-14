@@ -30,7 +30,7 @@ For text-to-image, `contents` is the prompt string. For edits/composition, `cont
 | Option | Behavior |
 | --- | --- |
 | `--provider` | Selects a config provider whose adapter is `gemini`. |
-| `-m`, `--model` | Gemini model ID or alias. Built-in aliases include `nano-banana-pro` and `nano-banana-2`. |
+| `-m`, `--model` | Gemini model ID or user-defined alias from `config.json`. |
 | `-p`, `--prompt` | Required prompt or edit instruction. |
 | `-f`, `--filename` | Required output path. Extension controls final file format; parent directories are created automatically. |
 | `-i`, `--input` | Repeatable input image path. Up to 14 images. Enables edit/composition. |
@@ -47,11 +47,23 @@ The script warns and ignores OpenAI-compatible image fields for this adapter: `-
 
 Do not recommend them for Gemini unless the user is intentionally passing provider-specific flags through a custom wrapper, which this script does not do.
 
-## Nano 2 special behavior
+## Advanced features (search and thinking)
 
-`--search` and `--thinking` only apply when the resolved model is exactly `gemini-3.1-flash-image-preview`.
+`--search` and `--thinking` require the model alias to declare the corresponding capabilities in `config.json`:
 
-If the user requests search grounding or thinking with another Gemini model, explain that the script warns and ignores those flags. Suggest `-m nano-banana-2` or an alias pointing to `gemini-3.1-flash-image-preview` if they need those features.
+```json
+{
+  "models": {
+    "my-nano2": {
+      "provider": "gemini",
+      "model": "gemini-3.1-flash-image-preview",
+      "capabilities": ["search", "thinking"]
+    }
+  }
+}
+```
+
+If the user requests search grounding or thinking without declared capabilities, the script warns and ignores those flags. These features are currently supported by models like `gemini-3.1-flash-image-preview` (Nano 2).
 
 ## Output handling
 
@@ -79,10 +91,23 @@ Edit or composition:
 uv run {baseDir}/scripts/generate.py --provider my-gemini -p "place the product on the marble table" -f outputs/composite.png -i product.png -i table.jpg
 ```
 
-Nano 2 with search and thinking:
+Nano 2 with search and thinking (requires capabilities declared in config.json):
 
 ```bash
-uv run {baseDir}/scripts/generate.py -m nano-banana-2 -p "poster for a real 2026 Tokyo jazz festival mood" -f outputs/poster.png --search web --thinking high --stream
+uv run {baseDir}/scripts/generate.py -m my-nano2 -p "poster for a real 2026 Tokyo jazz festival mood" -f outputs/poster.png --search web --thinking high --stream
+```
+
+Where `my-nano2` is a user-defined alias in `config.json`:
+```json
+{
+  "models": {
+    "my-nano2": {
+      "provider": "gemini",
+      "model": "gemini-3.1-flash-image-preview",
+      "capabilities": ["search", "thinking"]
+    }
+  }
+}
 ```
 
 ## Common failure causes
